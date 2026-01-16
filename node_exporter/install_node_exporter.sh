@@ -1,8 +1,8 @@
-
 #!/bin/bash
-# node_exporter安装脚本
-# 版本: 1.0
-# 功能: 解压node_exporter压缩包，安装到/opt，配置systemd服务
+# node_exporter安装脚本 (本地模式)
+# 版本: 1.1
+# 功能: 解压node_exporter压缩包，安装到当前目录的bin子目录，配置systemd服务
+# 注意: 仅 systemd 服务文件会创建在 /etc/systemd/system，其余文件均在脚本当前目录下
 
 set -e
 
@@ -11,9 +11,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=========================================="
-echo "开始安装 node_exporter"
-echo "当前目录: $(pwd)"
+echo "开始安装 node_exporter (本地模式)"
+echo "安装根目录: $SCRIPT_DIR"
 echo "=========================================="
+
+# 检查是否以root运行(为了创建服务文件)
+if [ "$EUID" -ne 0 ]; then 
+    echo "⚠️  需要 root 权限来创建 systemd 服务文件"
+    echo "请尝试: sudo $0"
+    exit 1
+fi
 
 # 检查压缩包是否存在
 TAR_FILE=$(ls -1 node_exporter-*.tar.gz 2>/dev/null | head -1)
@@ -32,6 +39,10 @@ if ! command -v tar &> /dev/null; then
     apt-get update && apt-get install -y tar || yum install -y tar
 fi
 
+# 定义本地安装目录
+INSTALL_DIR="$SCRIPT_DIR/bin"
+TEXTFILE_DIR="$SCRIPT_DIR/textfile_collector"
+
 # 解压压缩包
 echo "解压压缩包..."
 tar -xzf "$TAR_FILE" -C /tmp/
@@ -46,24 +57,19 @@ fi
 
 echo "解压目录: $EXTRACTED_DIR"
 
-# 创建安装目录
-INSTALL_DIR="/opt/node_exporter"
-echo "创建安装目录: $INSTALL_DIR"
+# 创建本地安装目录
+echo "创建本地安装目录: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 
 # 复制文件
 echo "复制文件到安装目录..."
 cp "$EXTRACTED_DIR/node_exporter" "$INSTALL_DIR/"
+# 仅修改当前目录下的文件权限
 chmod +x "$INSTALL_DIR/node_exporter"
 
-# 创建配置文件目录
-CONFIG_DIR="/etc/node_exporter"
-echo "创建配置目录: $CONFIG_DIR"
-mkdir -p "$CONFIG_DIR"
-
-# 创建systemd服务文件
+# 创建systemd服务文件 (这是唯一写入系统目录的操作)
 echo "创建systemd服务文件..."
-cat > /etc/systemd/system/node_exporter.service << 'EOF'
+cat > /etc/systemd/system/node_exporter.service << EOF
 [Unit]
 Description=Node Exporter
 After=network.target
@@ -72,43 +78,41 @@ After=network.target
 Type=simple
 User=root
 Group=root
-ExecStart=/opt/node_exporter/node_exporter \
-  --web.listen-address=:9100 \
-  --collector.disable-defaults \
-  --collector.cpu \
-  --collector.meminfo \
-  --collector.diskstats \
-  --collector.netdev \
-  --collector.filesystem \
-  --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|run|boot)($$|/) \
-  --collector.systemd \
-  --collector.systemd.unit-include="(docker|ssh|nginx|mysql|postgresql).service" \
-  --collector.textfile.directory=/var/lib/node_exporter/textfile_collector \
-  --collector.loadavg \
-  --collector.uname \
-  --collector.stat \
-  --collector.vmstat \
-  --collector.time \
-  --collector.netstat \
-  --collector.filefd \
-  --collector.ntp \
-  --collector.interrupts \
-  --collector.edac \
-  --collector.hwmon \
-  --collector.bonding \
-  --collector.arp \
-  --collector.conntrack \
-  --collector.sockstat \
-  --collector.processes \
-  --collector.tcpstat \
-  --collector.buddyinfo \
-  --collector.ksmd \
-  --collector.zfs \
-  --collector.xfs \
-  --collector.btrfs \
+ExecStart=$INSTALL_DIR/node_exporter \\
+  --web.listen-address=:9100 \\
+  --collector.disable-defaults \\
+  --collector.cpu \\
+  --collector.meminfo \\
+  --collector.diskstats \\
+  --collector.netdev \\
+  --collector.filesystem \\
+  --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|run|boot)(\$\$|/) \\
+  --collector.systemd \\
+  --collector.systemd.unit-include="(docker|ssh|nginx|mysql|postgresql).service" \\
+  --collector.textfile.directory=$TEXTFILE_DIR \\
+  --collector.loadavg \\
+  --collector.uname \\
+  --collector.stat \\
+  --collector.vmstat \\
+  --collector.time \\
+  --collector.netstat \\
+  --collector.filefd \\
+  --collector.ntp \\
+  --collector.interrupts \\
+  --collector.edac \\
+  --collector.hwmon \\
+  --collector.bonding \\
+  --collector.arp \\
+  --collector.conntrack \\
+  --collector.sockstat \\
+  --collector.processes \\
+  --collector.tcpstat \\
+  --collector.buddyinfo \\
+  --collector.ksmd \\
+  --collector.zfs \\
+  --collector.xfs \\
+  --collector.btrfs \\
   --collector.ipvs
-  
-  
   
 Restart=always
 RestartSec=5
@@ -128,8 +132,9 @@ EOF
 
 # 创建文本文件收集器目录
 echo "创建文本文件收集器目录..."
-mkdir -p /var/lib/node_exporter/textfile_collector
-chmod 755 /var/lib/node_exporter/textfile_collector
+mkdir -p "$TEXTFILE_DIR"
+# 仅修改当前目录下的文件权限
+chmod 755 "$TEXTFILE_DIR"
 
 # 重新加载systemd配置
 echo "重新加载systemd配置..."
@@ -189,7 +194,7 @@ EOF
 
 # 创建卸载脚本
 echo "创建卸载脚本..."
-cat > "$SCRIPT_DIR/uninstall_node_exporter.sh" << 'EOF'
+cat > "$SCRIPT_DIR/uninstall_node_exporter.sh" << EOF
 #!/bin/bash
 # node_exporter卸载脚本
 
@@ -200,15 +205,14 @@ systemctl disable node_exporter.service 2>/dev/null || true
 echo "删除systemd服务文件..."
 rm -f /etc/systemd/system/node_exporter.service
 
-echo "删除安装文件..."
-rm -rf /opt/node_exporter
-rm -rf /etc/node_exporter
-rm -rf /var/lib/node_exporter
+echo "删除本地安装目录..."
+rm -rf "$INSTALL_DIR"
+rm -rf "$TEXTFILE_DIR"
 
 echo "重新加载systemd配置..."
 systemctl daemon-reload
 
-echo "✅ node_exporter 已卸载"
+echo "✅ node_exporter 已卸载 (相关文件已从当前目录移除)"
 EOF
 
 chmod +x "$SCRIPT_DIR/uninstall_node_exporter.sh"
@@ -253,16 +257,6 @@ case "$1" in
         ;;
     *)
         echo "用法: $0 {start|stop|restart|status|logs|enable|disable|reload}"
-        echo ""
-        echo "可用命令:"
-        echo "  start     - 启动服务"
-        echo "  stop      - 停止服务"
-        echo "  restart   - 重启服务"
-        echo "  status    - 查看状态"
-        echo "  logs      - 查看日志"
-        echo "  enable    - 启用开机自启动"
-        echo "  enable    - 禁用开机自启动"
-        echo "  reload    - 重新加载配置"
         exit 1
         ;;
 esac
@@ -276,27 +270,12 @@ echo "✅ node_exporter 安装完成！"
 echo "=========================================="
 echo ""
 echo "安装信息:"
-echo "- 安装目录: /opt/node_exporter"
+echo "- 安装目录: $INSTALL_DIR"
 echo "- 配置文件: /etc/systemd/system/node_exporter.service"
+echo "- 收集器目录: $TEXTFILE_DIR"
 echo "- 服务端口: 9100"
-echo "- 运行用户: root"
-echo ""
-echo "管理命令:"
-echo "- 启动服务:   systemctl start node_exporter"
-echo "- 停止服务:   systemctl stop node_exporter"
-echo "- 查看状态:   systemctl status node_exporter"
-echo "- 查看日志:   journalctl -u node_exporter -f"
-echo "- 开机自启:   已启用"
-echo ""
-echo "脚本工具:"
-echo "- 管理脚本:   ./manage_node_exporter.sh"
-echo "- 卸载脚本:   ./uninstall_node_exporter.sh"
-echo ""
-echo "测试访问:"
-echo "  curl http://localhost:9100/metrics | head -5"
 echo ""
 echo "清理临时文件..."
 rm -rf "$EXTRACTED_DIR"
 
 echo "✅ 所有操作完成！"
-

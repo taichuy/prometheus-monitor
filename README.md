@@ -17,7 +17,7 @@
 - Docker
 - Docker Compose
 
-### 快速开始
+### 在线部署 (联网环境)
 
 1. 运行部署脚本：
    ```bash
@@ -34,6 +34,36 @@
    - **Grafana**: `http://<服务器IP>:3000` (默认账号: `admin` / `admin`)
    - **Prometheus**: `http://<服务器IP>:9090` (默认账号: `admin` / `Taichu@2026`)
    - **Alertmanager**: `http://<服务器IP>:9093`
+
+### 离线部署 (无网环境)
+
+如果服务器无法访问互联网，请按照以下步骤进行离线部署：
+
+#### 1. 准备镜像 (在有网机器上操作)
+
+进入 `images` 目录，运行保存镜像脚本：
+
+- **Windows**: 双击运行 `images/save-images.bat`
+- **Linux**: 运行 `bash images/save-images.sh`
+
+脚本会自动拉取所需的 Docker 镜像并保存到 `images` 目录下（生成 .tar 文件）。
+
+#### 2. 上传文件
+
+将整个项目文件夹（包含 `images` 目录下的 .tar 文件）上传到离线服务器。
+
+#### 3. 执行离线安装
+
+进入 `images` 目录，运行离线安装脚本：
+
+- **Linux**:
+  ```bash
+  cd images
+  sh offline-install.sh
+  ```
+- **Windows**: 双击运行 `images/offline-install.bat`
+
+该脚本会自动加载本地镜像，然后调用上级目录的主安装脚本 `setup-monitoring.sh` 完成部署。
 
 ### 修改 Prometheus 密码
 

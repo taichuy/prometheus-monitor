@@ -1,44 +1,5 @@
 #!/bin/bash
 
-echo "=========================================="
-echo "启动监控系统 (简化模式)..."
-echo "=========================================="
-
-cd "$(dirname "$0")"
-
-# 清理旧容器
-echo "清理旧容器..."
-docker-compose down 2>/dev/null || true
-
-# 拉取镜像
-echo "拉取镜像..."
-docker-compose pull || echo "继续启动..."
-
-# 启动服务
-echo "启动服务..."
-docker-compose up -d
-
-echo "等待服务启动..."
-sleep 10
-
-echo ""
-echo "✅ 服务启动完成！"
-echo ""
-echo "容器状态:"
-docker-compose ps
-
-echo ""
-echo "访问地址:"
-IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
-echo "- Prometheus:   http://$IP:9090  (用户: admin, 密码: Taichu@2026)"
-echo "- Grafana:      http://$IP:3000  (用户: admin, 密码: admin)"
-echo "- Alertmanager: http://$IP:9093"
-echo ""
-echo "查看日志: docker-compose logs -f"
-echo "停止服务: docker-compose down"
-root@taichu-db:/home/taichu/prometheus# cat setup-monitoring.sh 
-#!/bin/bash
-
 # ==================================================
 # Prometheus + Grafana + Alertmanager 一键部署脚本
 # 版本: 2.4
